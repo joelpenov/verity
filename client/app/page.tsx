@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSession, signOut } from "next-auth/react";
 import FileUpload from "@/components/FileUpload";
 import QueryInput from "@/components/QueryInput";
 import VerificationReport from "@/components/VerificationReport";
@@ -73,6 +74,9 @@ function EmptyState() {
 
 /* ─── Main page ─────────────────────────────────────────── */
 export default function HomePage() {
+  const { data: session } = useSession();
+  const idToken = session?.idToken;
+
   const [status, setStatus] = useState<AppStatus>("idle");
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [docLabel, setDocLabel] = useState("");
@@ -91,7 +95,7 @@ export default function HomePage() {
     setError(null);
     setResult(null);
     try {
-      const { document_ids } = await uploadDocuments(files);
+      const { document_ids } = await uploadDocuments(files, idToken);
       setDocumentIds(document_ids);
       setDocLabel(`${files.length} file${files.length > 1 ? "s" : ""}`);
       setStatus("ready");
@@ -107,7 +111,7 @@ export default function HomePage() {
     setError(null);
     setResult(null);
     try {
-      const data = await queryDocuments(question, documentIds);
+      const data = await queryDocuments(question, documentIds, idToken);
       setResult(data);
       setStatus("ready");
     } catch (e) {
@@ -168,8 +172,28 @@ export default function HomePage() {
           </span>
         </div>
 
-        {/* Status pill */}
+        {/* Status pill + sign out */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            title="Sign out"
+            style={{
+              background: "none", border: "1px solid var(--c-border)",
+              borderRadius: "var(--r-md)", padding: "4px 10px",
+              color: "var(--c-text-3)", fontSize: 11, cursor: "pointer",
+              transition: "border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease)",
+            }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--c-error-bdr)";
+              (e.currentTarget as HTMLButtonElement).style.color = "var(--c-error)";
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--c-border)";
+              (e.currentTarget as HTMLButtonElement).style.color = "var(--c-text-3)";
+            }}
+          >
+            Sign out
+          </button>
           {isUploading && <DotLoader label="Processing…" />}
           {isQuerying  && <DotLoader label="Analyzing…" />}
           {isReady && hasDoc && (
@@ -305,9 +329,9 @@ export default function HomePage() {
                     </span>
                   )}
                 </div>
-                <p style={{ color: "var(--c-text)", fontSize: 13, lineHeight: 1.65 }}>
+                <div style={{ color: "var(--c-text)", fontSize: 13, lineHeight: 1.65 }}>
                   <TypewriterText text={result.answer} speed={10} />
-                </p>
+                </div>
               </div>
 
               {/* Verification report */}

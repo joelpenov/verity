@@ -3,21 +3,30 @@ from pathlib import Path
 from werkzeug.utils import secure_filename
 import traceback
 import uuid
+import os
+
+from dotenv import load_dotenv
+load_dotenv()
 
 from file_handler import DocumentProcessor
 from builder import RetrieverBuilder
 from workflow import AgentWorkflow
 from utils.logging import logger
+from auth import require_auth
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB upload limit
 
+
+_ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "http://localhost:3000")
 
 @app.after_request
 def add_cors(response):
-    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Origin"] = _ALLOWED_ORIGIN
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
+
 
 UPLOAD_DIR = Path(__file__).parent / ".uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -55,7 +64,8 @@ def health():
     return jsonify({"status": "ok"})
 
 
-@app.post("/upload")
+@app.route("/upload", methods=["POST", "OPTIONS"])
+@require_auth
 def upload():
     files = request.files.getlist("files")
     if not files:
@@ -73,14 +83,15 @@ def upload():
         session_id = _build_session(saved)
     except ValueError as e:
         return jsonify({"error": str(e)}), 422
-    except Exception as e:
+    except Exception:
         logger.error(traceback.format_exc())
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Failed to process uploaded files."}), 500
 
     return jsonify({"document_ids": [session_id]})
 
 
-@app.post("/query")
+@app.route("/query", methods=["POST", "OPTIONS"])
+@require_auth
 def query():
     data = request.get_json(silent=True) or {}
     question = (data.get("question") or "").strip()
@@ -108,9 +119,13 @@ def query():
     })
 
 
-@app.post("/examples/<example_id>")
+@app.route("/examples/<example_id>", methods=["POST", "OPTIONS"])
+@require_auth
 def load_example(example_id: str):
-    example_dir = Path(__file__).parent / "examples" / example_id
+    base = (Path(__file__).parent / "examples").resolve()
+    example_dir = (base / example_id).resolve()
+    if not str(example_dir).startswith(str(base)):
+        return jsonify({"error": "Invalid example id"}), 400
     if not example_dir.exists():
         return jsonify({"error": f"Example '{example_id}' not found"}), 404
 
@@ -128,4 +143,4 @@ def load_example(example_id: str):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8000)
+    app.run(port=8000)
