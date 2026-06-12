@@ -25,17 +25,24 @@ export default function QueryInput({ onSubmit, disabled, defaultValue = "", show
     if (defaultValue) setValue(defaultValue);
   }, [defaultValue]);
 
+  function submit() {
+    if (value.trim() && !disabled) {
+      onSubmit(value.trim());
+      setValue("");
+    }
+  }
+
   function handleKey(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (value.trim() && !disabled) onSubmit(value.trim());
+      submit();
     }
   }
 
   const canSubmit = value.trim().length > 0 && !disabled;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       {/* Suggested question chips */}
       {showSuggestions && (
         <div className="flex flex-wrap gap-2 anim-fade-in">
@@ -81,11 +88,11 @@ export default function QueryInput({ onSubmit, disabled, defaultValue = "", show
           onKeyDown={handleKey}
           disabled={disabled}
           placeholder={disabled ? "Upload documents to start asking questions…" : "Ask anything about your documents… (Enter to send)"}
-          rows={3}
+          rows={2}
           style={{
             width: "100%",
-            padding: "12px 14px",
-            paddingBottom: "28px",
+            padding: "10px 12px",
+            paddingBottom: "24px",
             borderRadius: "var(--r-lg)",
             background: "var(--c-surface-2)",
             color: "var(--c-text)",
@@ -126,7 +133,7 @@ export default function QueryInput({ onSubmit, disabled, defaultValue = "", show
           {!disabled && "⏎ Enter to send · Shift+Enter for new line"}
         </span>
         <button
-          onClick={() => canSubmit && onSubmit(value.trim())}
+          onClick={submit}
           disabled={!canSubmit}
           style={{
             padding: "8px 20px",

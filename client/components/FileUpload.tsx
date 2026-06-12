@@ -5,6 +5,7 @@ import { useRef, useState, DragEvent } from "react";
 interface Props {
   onUpload: (files: File[]) => void;
   disabled?: boolean;
+  isProcessing?: boolean;
 }
 
 const ACCEPTED_EXTS = [".pdf", ".docx", ".txt", ".md"];
@@ -49,7 +50,7 @@ function ExtBadge({ name }: { name: string }) {
   );
 }
 
-export default function FileUpload({ onUpload, disabled }: Props) {
+export default function FileUpload({ onUpload, disabled, isProcessing }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [selected, setSelected] = useState<File[]>([]);
@@ -86,33 +87,59 @@ export default function FileUpload({ onUpload, disabled }: Props) {
   const totalSize = selected.reduce((s, f) => s + f.size, 0);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div
+      className="flex flex-col gap-2"
+      style={{
+        borderRadius: "var(--r-xl)",
+        animation: isProcessing ? "processing-ring 1.6s ease-in-out infinite" : "none",
+        transition: "box-shadow var(--t-mid) var(--ease)",
+      }}
+    >
       {/* Drop zone */}
       <div
-        onClick={() => !disabled && inputRef.current?.click()}
-        onDragOver={e => { e.preventDefault(); if (!disabled) setDragging(true); }}
+        onClick={() => !disabled && !isProcessing && inputRef.current?.click()}
+        onDragOver={e => { e.preventDefault(); if (!disabled && !isProcessing) setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
         style={{
-          border: `1.5px dashed ${dragging ? "var(--c-primary)" : "var(--c-border-2)"}`,
+          border: `1.5px dashed ${isProcessing ? "var(--c-primary)" : dragging ? "var(--c-primary)" : "var(--c-border-2)"}`,
           borderRadius: "var(--r-lg)",
-          padding: "28px 20px",
+          padding: "16px 14px",
           textAlign: "center",
-          cursor: disabled ? "not-allowed" : "pointer",
-          opacity: disabled ? 0.5 : 1,
-          background: dragging ? "var(--c-primary-glow)" : "var(--c-surface-3)",
+          cursor: disabled || isProcessing ? "not-allowed" : "pointer",
+          opacity: disabled && !isProcessing ? 0.5 : 1,
+          background: isProcessing ? "var(--c-primary-glow)" : dragging ? "var(--c-primary-glow)" : "var(--c-surface-3)",
           transition: "background var(--t-mid) var(--ease), border-color var(--t-mid) var(--ease)",
         }}
       >
-        <div style={{ fontSize: 28, marginBottom: 8 }}>
-          {dragging ? "⬇" : "📂"}
-        </div>
-        <p style={{ color: "var(--c-text)", fontSize: 13, fontWeight: 500 }}>
-          {dragging ? "Drop files here" : "Drag & drop files"}
-        </p>
-        <p style={{ color: "var(--c-text-2)", fontSize: 12, marginTop: 4 }}>
-          or <span style={{ color: "var(--c-primary)", fontWeight: 600 }}>browse</span> · PDF, DOCX, TXT, MD
-        </p>
+        {isProcessing ? (
+          <>
+            <div className="anim-spin" style={{
+              width: 22, height: 22, margin: "0 auto 8px",
+              border: "2px solid var(--c-border-2)",
+              borderTopColor: "var(--c-primary)",
+              borderRadius: "50%",
+            }} />
+            <p style={{ color: "var(--c-primary-bright)", fontSize: 12, fontWeight: 600 }}>
+              Processing document…
+            </p>
+            <p style={{ color: "var(--c-text-3)", fontSize: 11, marginTop: 3 }}>
+              Chunking · Embedding · Building index
+            </p>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 22, marginBottom: 6 }}>
+              {dragging ? "⬇" : "📂"}
+            </div>
+            <p style={{ color: "var(--c-text)", fontSize: 12, fontWeight: 500 }}>
+              {dragging ? "Drop files here" : "Drag & drop files"}
+            </p>
+            <p style={{ color: "var(--c-text-2)", fontSize: 11, marginTop: 3 }}>
+              or <span style={{ color: "var(--c-primary)", fontWeight: 600 }}>browse</span> · PDF, DOCX, TXT, MD
+            </p>
+          </>
+        )}
         <input
           ref={inputRef}
           type="file"
@@ -120,7 +147,7 @@ export default function FileUpload({ onUpload, disabled }: Props) {
           accept={ACCEPTED_EXTS.join(",")}
           className="hidden"
           onChange={e => handleFiles(e.target.files)}
-          disabled={disabled}
+          disabled={disabled || isProcessing}
         />
       </div>
 
@@ -176,7 +203,7 @@ export default function FileUpload({ onUpload, disabled }: Props) {
 
       {/* Upload button */}
       <button
-        onClick={() => selected.length > 0 && onUpload(selected)}
+        onClick={() => { if (selected.length > 0) { onUpload(selected); setSelected([]); setValidationError(null); } }}
         disabled={disabled || selected.length === 0}
         style={{
           width: "100%",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
 
 interface Props {
   text: string;
@@ -8,7 +9,7 @@ interface Props {
   className?: string;
 }
 
-export default function TypewriterText({ text, speed = 12, className = "" }: Props) {
+export default function TypewriterText({ text, speed = 10, className = "" }: Props) {
   const [displayed, setDisplayed] = useState("");
   const [done, setDone] = useState(false);
 
@@ -28,15 +29,21 @@ export default function TypewriterText({ text, speed = 12, className = "" }: Pro
     return () => clearInterval(id);
   }, [text, speed]);
 
+  if (done) {
+    return (
+      <div className={`markdown-answer ${className}`}>
+        <ReactMarkdown>{text}</ReactMarkdown>
+      </div>
+    );
+  }
+
   return (
     <span className={className}>
       {displayed}
-      {!done && (
-        <span
-          className="anim-blink inline-block w-0.5 h-4 bg-current ml-0.5 align-middle"
-          style={{ verticalAlign: "middle" }}
-        />
-      )}
+      <span
+        className="anim-blink inline-block w-0.5 h-4 bg-current ml-0.5 align-middle"
+        style={{ verticalAlign: "middle" }}
+      />
     </span>
   );
 }

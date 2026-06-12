@@ -52,7 +52,7 @@
 }
 
 /* ─── Base ──────────────────────────────────────────────── */
-html, body { height: 100%; }
+html, body { height: 100%; overflow: hidden; }
 body {
   background: var(--c-bg);
   color: var(--c-text);
@@ -84,6 +84,11 @@ body {
 }
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+@keyframes processing-ring {
+  0%   { box-shadow: 0 0 0 0   var(--c-primary-glow), 0 0 12px 2px var(--c-primary-glow); }
+  50%  { box-shadow: 0 0 0 4px var(--c-primary-glow), 0 0 20px 4px var(--c-primary-glow); }
+  100% { box-shadow: 0 0 0 0   var(--c-primary-glow), 0 0 12px 2px var(--c-primary-glow); }
 }
 @keyframes cursor-blink {
   0%, 100% { opacity: 1; }
@@ -152,6 +157,55 @@ body {
 .dot-loader span:nth-child(1) { animation-delay: 0ms;    }
 .dot-loader span:nth-child(2) { animation-delay: 160ms;  }
 .dot-loader span:nth-child(3) { animation-delay: 320ms;  }
+
+/* ─── Markdown answer ───────────────────────────────────── */
+.markdown-answer { color: var(--c-text); font-size: 13px; line-height: 1.7; }
+.markdown-answer p          { margin: 0 0 0.6em; }
+.markdown-answer p:last-child { margin-bottom: 0; }
+.markdown-answer h1, .markdown-answer h2, .markdown-answer h3 {
+  color: var(--c-text); font-weight: 700; margin: 0.8em 0 0.3em;
+}
+.markdown-answer h1 { font-size: 15px; }
+.markdown-answer h2 { font-size: 14px; }
+.markdown-answer h3 { font-size: 13px; }
+.markdown-answer ul, .markdown-answer ol {
+  padding-left: 1.25em; margin: 0 0 0.6em;
+}
+.markdown-answer li { margin-bottom: 0.2em; }
+.markdown-answer code {
+  background: var(--c-surface-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  padding: 1px 5px;
+  font-size: 12px;
+  color: var(--c-primary-bright);
+  font-family: var(--font-geist-mono), monospace;
+}
+.markdown-answer pre {
+  background: var(--c-surface-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 0 0 0.6em;
+}
+.markdown-answer pre code {
+  background: none; border: none; padding: 0; color: var(--c-text-2);
+}
+.markdown-answer strong { color: var(--c-text); font-weight: 600; }
+.markdown-answer em     { color: var(--c-text-2); font-style: italic; }
+.markdown-answer blockquote {
+  border-left: 3px solid var(--c-border-focus);
+  padding-left: 10px;
+  margin: 0 0 0.6em;
+  color: var(--c-text-2);
+}
+.markdown-answer hr {
+  border: none;
+  border-top: 1px solid var(--c-border);
+  margin: 0.6em 0;
+}
+.markdown-answer a { color: var(--c-primary-bright); text-decoration: underline; }
 
 /* ─── Scrollbar ─────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
