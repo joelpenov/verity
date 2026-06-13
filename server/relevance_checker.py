@@ -24,7 +24,13 @@ class RelevanceChecker:
             logger.debug("No documents returned from retriever.invoke(). Classifying as NO_MATCH.")
             return "NO_MATCH"
 
-        document_content = "\n\n".join(doc.page_content for doc in top_docs[:k])
+        # Filter to docs with actual content; fall back to PARTIAL if chunks exist but are thin
+        content_docs = [d for d in top_docs if d.page_content and d.page_content.strip()]
+        if not content_docs:
+            logger.debug("All retrieved docs have empty page_content. Classifying as NO_MATCH.")
+            return "NO_MATCH"
+
+        document_content = "\n\n".join(doc.page_content for doc in content_docs[:k])
 
         prompt = f"""You are an AI relevance checker between a user's question and provided document content.
                     Instructions:
@@ -49,14 +55,14 @@ class RelevanceChecker:
             )
         except Exception as e:
             logger.error(f"Error during model inference: {e}")
-            return "NO_MATCH"
+            return "PARTIAL"
 
         try:
             llm_response = (response.choices[0].message.content or "").strip().upper()
             logger.debug(f"LLM response: {llm_response}")
         except (IndexError, AttributeError) as e:
             logger.error(f"Unexpected response structure: {e}")
-            return "NO_MATCH"
+            return "PARTIAL"
 
         print(f"Checker response: {llm_response}")
 

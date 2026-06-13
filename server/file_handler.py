@@ -4,7 +4,7 @@ import pickle
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List
-from docling.document_converter import DocumentConverter
+import pymupdf4llm
 from langchain_text_splitters import MarkdownHeaderTextSplitter
 from config import constants
 from config.settings import settings
@@ -53,14 +53,19 @@ class DocumentProcessor:
         return all_chunks
     
     def _process_file(self, file) -> List:
-        """Original processing logic with Docling"""
-        if not file.name.endswith(('.pdf', '.docx', '.txt', '.md')):
-            logger.warning(f"Skipping unsupported file type: {file.name}")
+        """Convert document to markdown and split into chunks."""
+        name = file.name
+        if name.endswith('.pdf'):
+            markdown = pymupdf4llm.to_markdown(name)
+        elif name.endswith(('.txt', '.md')):
+            with open(name, 'r', errors='replace') as f:
+                markdown = f.read()
+        else:
+            logger.warning(f"Skipping unsupported file type: {name}")
             return []
-        converter = DocumentConverter()
-        markdown = converter.convert(file.name).document.export_to_markdown()
         splitter = MarkdownHeaderTextSplitter(self.headers)
-        return splitter.split_text(markdown)
+        chunks = splitter.split_text(markdown)
+        return [c for c in chunks if c.page_content and c.page_content.strip()]
     
     def _generate_hash(self, content: bytes) -> str:
         return hashlib.sha256(content).hexdigest()

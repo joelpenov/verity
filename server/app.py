@@ -1,3 +1,12 @@
+# Azure App Service ships sqlite3 < 3.35.0; chromadb requires >= 3.35.0.
+# pysqlite3-binary provides a newer build — swap it in before any chromadb import.
+try:
+    __import__('pysqlite3')
+    import sys
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+except ImportError:
+    pass
+
 from flask import Flask, request, jsonify
 from pathlib import Path
 from werkzeug.utils import secure_filename
