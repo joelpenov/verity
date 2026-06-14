@@ -13,6 +13,7 @@ from werkzeug.utils import secure_filename
 import traceback
 import uuid
 import os
+import shutil
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -22,6 +23,7 @@ from builder import RetrieverBuilder
 from workflow import AgentWorkflow
 from utils.logging import logger
 from auth import require_auth
+from config.settings import settings
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB upload limit
@@ -42,6 +44,8 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 # In-memory session store: session_id -> EnsembleRetriever
 _sessions: dict = {}
+_session_names: dict = {}        # session_id -> list[str] of original filenames
+_session_collections: dict = {}  # session_id -> chromadb collection name
 
 _processor = DocumentProcessor()
 _retriever_builder = RetrieverBuilder()
@@ -54,13 +58,16 @@ class _FileRef:
         self.name = path
 
 
-def _build_session(paths: list[str]) -> str:
+def _build_session(paths: list[str], names: list[str]) -> str:
     chunks = _processor.process([_FileRef(p) for p in paths])
     if not chunks:
         raise ValueError("No processable content found in the provided files.")
-    retriever = _retriever_builder.build_hybrid_retriever(chunks)
     session_id = str(uuid.uuid4())
+    collection_name = f"s{session_id.replace('-', '')}"
+    retriever = _retriever_builder.build_hybrid_retriever(chunks, collection_name)
     _sessions[session_id] = retriever
+    _session_names[session_id] = names
+    _session_collections[session_id] = collection_name
     return session_id
 
 
@@ -81,22 +88,24 @@ def upload():
         return jsonify({"error": "No files provided"}), 400
 
     saved: list[str] = []
+    names: list[str] = []
     for f in files:
         filename = secure_filename(f.filename or "upload")
         dest = UPLOAD_DIR / filename
         f.save(dest)
         saved.append(str(dest))
+        names.append(filename)
         logger.info(f"Saved upload: {dest}")
 
     try:
-        session_id = _build_session(saved)
+        session_id = _build_session(saved, names)
     except ValueError as e:
         return jsonify({"error": str(e)}), 422
     except Exception:
         logger.error(traceback.format_exc())
         return jsonify({"error": "Failed to process uploaded files."}), 500
 
-    return jsonify({"document_ids": [session_id]})
+    return jsonify({"document_ids": [session_id], "document_names": names})
 
 
 @app.route("/query", methods=["POST", "OPTIONS"])
@@ -128,6 +137,38 @@ def query():
     })
 
 
+@app.route("/clear", methods=["POST", "OPTIONS"])
+@require_auth
+def clear_session():
+    # Drop all in-memory session state first (releases Chroma object references)
+    _sessions.clear()
+    _session_names.clear()
+    _session_collections.clear()
+
+    # Wipe the ChromaDB directory so no old embeddings survive
+    chroma_path = Path(settings.CHROMA_DB_PATH)
+    try:
+        if chroma_path.exists():
+            shutil.rmtree(chroma_path)
+        chroma_path.mkdir(parents=True, exist_ok=True)
+        logger.info("ChromaDB directory wiped")
+    except Exception as e:
+        logger.warning(f"Could not wipe ChromaDB: {e}")
+
+    # Delete uploaded files
+    deleted = 0
+    for f in UPLOAD_DIR.iterdir():
+        if f.is_file():
+            try:
+                f.unlink()
+                deleted += 1
+            except Exception as e:
+                logger.warning(f"Could not delete {f}: {e}")
+
+    logger.info(f"Clear: removed {deleted} uploaded file(s), all sessions, and ChromaDB")
+    return jsonify({"cleared": True, "files_deleted": deleted})
+
+
 @app.route("/examples/<example_id>", methods=["POST", "OPTIONS"])
 @require_auth
 def load_example(example_id: str):
@@ -142,13 +183,14 @@ def load_example(example_id: str):
     if not paths:
         return jsonify({"error": "Example directory is empty"}), 422
 
+    names = [Path(p).name for p in paths]
     try:
-        session_id = _build_session(paths)
+        session_id = _build_session(paths, names)
     except Exception as e:
         logger.error(f"Failed to load example '{example_id}': {e}")
         return jsonify({"error": "Failed to process example documents"}), 500
 
-    return jsonify({"document_ids": [session_id]})
+    return jsonify({"document_ids": [session_id], "document_names": names})
 
 
 if __name__ == "__main__":

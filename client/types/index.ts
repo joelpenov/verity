@@ -8,6 +8,7 @@ export interface QueryResponse {
 
 export interface UploadResponse {
   document_ids: string[];
+  document_names?: string[];
 }
 
 export interface Example {

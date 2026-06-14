@@ -27,6 +27,14 @@ export async function loadExample(exampleId: string, token?: string): Promise<Up
   return res.json();
 }
 
+export async function clearFiles(token?: string): Promise<void> {
+  const res = await fetch(`${API_URL}/clear`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
 export async function queryDocuments(
   question: string,
   documentIds: string[],

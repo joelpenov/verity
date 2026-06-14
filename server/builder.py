@@ -10,12 +10,13 @@ class RetrieverBuilder:
     def __init__(self):
         self.embeddings = OpenAIEmbeddings(api_key=settings.openai_api_key)
 
-    def build_hybrid_retriever(self, docs):
+    def build_hybrid_retriever(self, docs, collection_name: str = "langchain"):
         """Build a hybrid retriever using BM25 and vector-based retrieval."""
         try:
             vector_store = Chroma.from_documents(
                 documents=docs,
                 embedding=self.embeddings,
+                collection_name=collection_name,
                 persist_directory=settings.CHROMA_DB_PATH
             )
             logger.info("Vector store created successfully.")

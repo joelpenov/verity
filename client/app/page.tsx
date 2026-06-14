@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useSession, signOut } from "next-auth/react";
 import FileUpload from "@/components/FileUpload";
 import QueryInput from "@/components/QueryInput";
 import VerificationReport from "@/components/VerificationReport";
 import Skeleton from "@/components/Skeleton";
 import TypewriterText from "@/components/TypewriterText";
-import { uploadDocuments, queryDocuments } from "@/lib/api";
+import DocumentList from "@/components/DocumentList";
+import { uploadDocuments, queryDocuments, clearFiles } from "@/lib/api";
 import type { AppStatus, QueryResponse } from "@/types";
 
 /* ─── Relevance config ──────────────────────────────────── */
@@ -72,6 +73,112 @@ function EmptyState() {
   );
 }
 
+/* ─── User menu dropdown ────────────────────────────────── */
+function UserMenu({ onClear, clearDisabled }: { onClear: () => void; clearDisabled: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const menuItemStyle: CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    width: "100%",
+    padding: "7px 12px",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    fontSize: 12,
+    textAlign: "left",
+    borderRadius: "var(--r-md)",
+    transition: "background var(--t-fast) var(--ease), color var(--t-fast) var(--ease)",
+  };
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          background: "none",
+          border: "1px solid var(--c-border)",
+          borderRadius: "var(--r-md)",
+          padding: "4px 10px",
+          color: "var(--c-text-3)",
+          fontSize: 11,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          transition: "border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease)",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--c-border-focus)";
+          (e.currentTarget as HTMLButtonElement).style.color = "var(--c-text)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--c-border)";
+          (e.currentTarget as HTMLButtonElement).style.color = "var(--c-text-3)";
+        }}
+      >
+        Account
+        <span style={{ fontSize: 9, opacity: 0.7 }}>{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div
+          className="anim-scale-in"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            right: 0,
+            minWidth: 160,
+            background: "var(--c-surface-2)",
+            border: "1px solid var(--c-border)",
+            borderRadius: "var(--r-lg)",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+            padding: 4,
+            zIndex: 100,
+          }}
+        >
+          <button
+            onClick={() => { setOpen(false); onClear(); }}
+            disabled={clearDisabled}
+            style={{
+              ...menuItemStyle,
+              color: clearDisabled ? "var(--c-text-3)" : "var(--c-warn)",
+              opacity: clearDisabled ? 0.45 : 1,
+              cursor: clearDisabled ? "not-allowed" : "pointer",
+            }}
+            onMouseEnter={(e) => { if (!clearDisabled) (e.currentTarget as HTMLButtonElement).style.background = "var(--c-warn-bg)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
+          >
+            <span>🗑</span> Clean Files
+          </button>
+
+          <div style={{ height: 1, background: "var(--c-border)", margin: "2px 4px" }} />
+
+          <button
+            onClick={() => { setOpen(false); signOut({ callbackUrl: "/login" }); }}
+            style={{ ...menuItemStyle, color: "var(--c-error)" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--c-error-bg)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
+          >
+            <span>↪</span> Sign Out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Main page ─────────────────────────────────────────── */
 export default function HomePage() {
   const { data: session } = useSession();
@@ -79,6 +186,7 @@ export default function HomePage() {
 
   const [status, setStatus] = useState<AppStatus>("idle");
   const [documentIds, setDocumentIds] = useState<string[]>([]);
+  const [documentNames, setDocumentNames] = useState<string[]>([]);
   const [docLabel, setDocLabel] = useState("");
   const [result, setResult] = useState<QueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -95,14 +203,30 @@ export default function HomePage() {
     setError(null);
     setResult(null);
     try {
-      const { document_ids } = await uploadDocuments(files, idToken);
+      const { document_ids, document_names } = await uploadDocuments(files, idToken);
       setDocumentIds(document_ids);
+      setDocumentNames(document_names ?? files.map((f) => f.name));
       setDocLabel(`${files.length} file${files.length > 1 ? "s" : ""}`);
       setStatus("ready");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
       setStatus("error");
     }
+  }
+
+  async function handleClear() {
+    try {
+      await clearFiles(idToken);
+    } catch {
+      // best-effort — still reset UI even if backend call fails
+    }
+    setDocumentIds([]);
+    setDocumentNames([]);
+    setDocLabel("");
+    setResult(null);
+    setError(null);
+    setLastQuestion("");
+    setStatus("idle");
   }
 
   async function handleQuery(question: string) {
@@ -172,28 +296,9 @@ export default function HomePage() {
           </span>
         </div>
 
-        {/* Status pill + sign out */}
+        {/* Status pill + account menu */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            title="Sign out"
-            style={{
-              background: "none", border: "1px solid var(--c-border)",
-              borderRadius: "var(--r-md)", padding: "4px 10px",
-              color: "var(--c-text-3)", fontSize: 11, cursor: "pointer",
-              transition: "border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease)",
-            }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--c-error-bdr)";
-              (e.currentTarget as HTMLButtonElement).style.color = "var(--c-error)";
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--c-border)";
-              (e.currentTarget as HTMLButtonElement).style.color = "var(--c-text-3)";
-            }}
-          >
-            Sign out
-          </button>
+          <UserMenu onClear={handleClear} clearDisabled={documentIds.length === 0 || isUploading || isQuerying} />
           {isUploading && <DotLoader label="Processing…" />}
           {isQuerying  && <DotLoader label="Analyzing…" />}
           {isReady && hasDoc && (
@@ -249,6 +354,11 @@ export default function HomePage() {
             </h2>
             <FileUpload onUpload={handleUpload} disabled={isUploading || isQuerying} isProcessing={isUploading} />
           </div>
+
+          {/* Document list — contextual: shimmer while uploading, list when ready */}
+          {(isUploading || documentNames.length > 0) && (
+            <DocumentList names={documentNames} isLoading={isUploading} />
+          )}
 
         </div>
 

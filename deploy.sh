@@ -162,14 +162,27 @@ ok "Flask API configured"
 # ── Flask API deploy ──────────────────────────────────────────────────────────
 step "Deploying Flask API (Oryx build — installs Python packages, takes ~2 min)"
 
+API_ZIP="/tmp/verity-api-$$.zip"
 cd "${SERVER_DIR}"
-az webapp up \
+zip -r "${API_ZIP}" . \
+  -x "*.pyc" -x "*/__pycache__/*" \
+  -x "venv/*" -x ".venv/*" \
+  -x ".cache/*" -x ".cache_v2/*" \
+  -x ".uploads/*" \
+  -x "chroma_db/*" -x "chroma_db_v2/*" \
+  -x ".DS_Store" -x "*.egg-info/*" \
+  -x ".azure/*" -x "*.zip"
+ok "API bundle: $(du -sh "${API_ZIP}" | cut -f1)"
+
+az webapp deploy \
   --name "${API_APP_NAME}" \
   --resource-group "${RESOURCE_GROUP}" \
-  --runtime "PYTHON:3.11" \
-  --sku "${API_PLAN_SKU}" \
+  --src-path "${API_ZIP}" \
+  --type zip \
+  --timeout 600 \
   --output none
 
+rm -f "${API_ZIP}"
 ok "Flask API deployed → ${API_URL}"
 
 # ── Next.js client ────────────────────────────────────────────────────────────
